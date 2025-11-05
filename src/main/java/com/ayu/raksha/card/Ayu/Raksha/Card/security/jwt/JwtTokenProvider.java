@@ -17,20 +17,50 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import jakarta.annotation.PostConstruct;
 
 @Component
 public class JwtTokenProvider {
 
-    // Prefer a Supabase-specific JWT secret if set; otherwise fall back to the app's own JWT secret
-    @Value("${supabase.jwt.secret:${app.jwt.secret}}")
+    // Prefer a Supabase-specific JWT secret if set; otherwise fall back to the app's own JWT secret.
+    // Make the property resolution tolerant by providing an empty default so missing env vars won't fail startup.
+    @Value("${supabase.jwt.secret:${app.jwt.secret:}}")
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration-ms}")
+    // Provide a default expiration so missing config doesn't break injection
+    @Value("${app.jwt.expiration-ms:86400000}")
     private int jwtExpirationMs;
 
-    private SecretKey getSigningKey() {
-        byte[] keyBytes = null;
+    // Flag to indicate whether JWT operations are enabled (i.e., a usable secret is configured)
+    private boolean enabled = false;
+
+    @PostConstruct
+    private void init() {
         if (jwtSecret == null) jwtSecret = "";
+        // Consider a secret usable if it decodes to at least 16 bytes or plain-text length >= 16
+        try {
+            byte[] decoded = Base64.getDecoder().decode(jwtSecret);
+            if (decoded != null && decoded.length >= 16) {
+                enabled = true;
+                return;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // not base64
+        }
+        if (jwtSecret.getBytes(StandardCharsets.UTF_8).length >= 16) {
+            enabled = true;
+        } else {
+            enabled = false;
+            System.out.println("JWT provider disabled: no valid jwt secret configured. Token validation/generation will be no-ops.");
+        }
+    }
+
+    private SecretKey getSigningKey() {
+        if (!enabled) {
+            throw new IllegalStateException("JWT secret not configured; JwtTokenProvider is disabled.");
+        }
+
+        byte[] keyBytes = null;
 
         // Debug logging to verify the secret being used
         System.out.println("=== JWT Secret Debug ===");
@@ -60,6 +90,7 @@ public class JwtTokenProvider {
     }
 
     public String generateToken(Authentication authentication) {
+        if (!enabled) throw new IllegalStateException("Cannot generate JWT: no secret configured.");
         User userPrincipal = (User) authentication.getPrincipal();
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
@@ -73,6 +104,7 @@ public class JwtTokenProvider {
     }
 
     public String generateTokenForUser(User user) {
+        if (!enabled) throw new IllegalStateException("Cannot generate JWT: no secret configured.");
         if (user == null || !StringUtils.hasText(user.getEmail())) {
             throw new IllegalArgumentException("Cannot create JWT for user with null or empty email.");
         }
@@ -89,6 +121,7 @@ public class JwtTokenProvider {
     }
 
     public String generateBackendToken(User user) {
+        if (!enabled) throw new IllegalStateException("Cannot generate JWT: no secret configured.");
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
         String type;
@@ -173,6 +206,7 @@ public class JwtTokenProvider {
     }
 
     public boolean validateToken(String authToken) {
+        if (!enabled) return false;
         try {
             Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(authToken);
             return true;
