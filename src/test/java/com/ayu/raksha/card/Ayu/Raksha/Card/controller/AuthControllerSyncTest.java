@@ -7,6 +7,7 @@ import com.ayu.raksha.card.Ayu.Raksha.Card.repository.UserRepository;
 import com.ayu.raksha.card.Ayu.Raksha.Card.security.jwt.JwtTokenProvider;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.AuthService;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseAdminService;
+import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseTokenValidator;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +43,9 @@ public class AuthControllerSyncTest {
     @Mock
     private SupabaseAdminService supabaseAdminService;
 
+    @Mock
+    private SupabaseTokenValidator supabaseTokenValidator;
+
     @InjectMocks
     private AuthController authController;
 
@@ -54,6 +59,16 @@ public class AuthControllerSyncTest {
         req.setEmail("patient@example.com");
         req.setName("Test Patient");
         req.setPhone("+91 9999999999");
+
+        // Mock Supabase token validation response
+        Map<String, Object> supabaseUser = new HashMap<>();
+        supabaseUser.put("valid", true);
+        supabaseUser.put("email", "patient@example.com");
+        supabaseUser.put("name", "Test Patient");
+        supabaseUser.put("phone", "+91 9999999999");
+        supabaseUser.put("role", "patient");
+        supabaseUser.put("userId", "supabase-user-123");
+        when(supabaseTokenValidator.validateAndGetUser(accessToken)).thenReturn(supabaseUser);
 
         when(jwtTokenProvider.validateToken(accessToken)).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT(accessToken)).thenReturn("patient@example.com");
