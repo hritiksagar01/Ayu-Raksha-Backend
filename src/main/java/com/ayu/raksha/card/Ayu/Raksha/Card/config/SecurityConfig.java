@@ -12,6 +12,7 @@
     import org.springframework.beans.factory.annotation.Autowired;
     import org.springframework.context.annotation.Bean;
     import org.springframework.context.annotation.Configuration;
+    import org.springframework.http.HttpMethod;
     import org.springframework.security.authentication.AuthenticationManager;
     import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
     import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -50,21 +51,30 @@
 
         @Bean
         public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+            // Ensure Spring Security uses the application's CORS configuration
+            http.cors();
             http
                     .csrf(csrf -> csrf.disable())
                     .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth
+                            // Allow CORS preflight requests through without authentication
+                            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                             .requestMatchers("/api/auth/**").permitAll() // Allow all auth requests
                             .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
-                            .requestMatchers("/api/patient/**").hasRole("PATIENT")
+                            // Allow patient-related endpoints to be accessed by patients, doctors, and uploaders
+                            .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER")
+                            // Upload: allow presign/metadata to broader roles; restrict direct file POST to admin/uploader
+                            .requestMatchers(HttpMethod.POST, "/api/upload/presign", "/api/upload/metadata").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .requestMatchers(HttpMethod.GET, "/api/upload/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .requestMatchers(HttpMethod.POST, "/api/upload/**").hasAnyRole("ADMIN", "UPLOADER")
                             .anyRequest().authenticated() // All other requests must be authenticated
                     );
 
             // Add our custom JWT filter before the standard authentication filter
             http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-            // Add a logging filter to trace requests
-            http.addFilterBefore(new Filter() {
+            // Add a logging filter to trace requests (after JWT so we can see authorities)
+            http.addFilterAfter(new Filter() {
                 @Override
                 public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
                     HttpServletRequest httpRequest = (HttpServletRequest) request;

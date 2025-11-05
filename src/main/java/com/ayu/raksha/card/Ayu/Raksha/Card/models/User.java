@@ -34,6 +34,10 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role;
 
+    // New: 12-digit patient identifier (nullable for non-patient roles)
+    @Column(unique = true)
+    private String patientId;
+
     // --- Constructor ---
     public User() {}
 
@@ -45,6 +49,7 @@ public class User implements UserDetails {
     public LocalDate getDateOfBirth() { return dateOfBirth; }
     public String getGender() { return gender; }
     public Role getRole() { return role; }
+    public String getPatientId() { return patientId; }
 
     // --- Setters (Your setters were already correct) ---
     public void setId(Long id) { this.id = id; }
@@ -55,6 +60,7 @@ public class User implements UserDetails {
     public void setDateOfBirth(LocalDate dateOfBirth) { this.dateOfBirth = dateOfBirth; }
     public void setGender(String gender) { this.gender = gender; }
     public void setRole(Role role) { this.role = role; }
+    public void setPatientId(String patientId) { this.patientId = patientId; }
 
 
     // --- UserDetails Methods (Corrected) ---

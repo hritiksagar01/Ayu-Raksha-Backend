@@ -1,0 +1,15 @@
+target/
+!target/*.jar
+!target/*SNAPSHOT*.jar
+*.log
+*.tmp
+*.md
+.mvn/
+.mvnw
+.mvnw.cmd
+Dockerfile
+docker-compose.yml
+.idea/
+.vscode/
+/.git
+**/node_modules

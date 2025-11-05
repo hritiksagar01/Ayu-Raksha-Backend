@@ -23,7 +23,6 @@ public class SignupRequest {
     }
 
     public void setEmail(String email) {
-        // --- ADD THIS LINE FOR THE FINAL TEST ---
         System.out.println("--- Jackson is calling setEmail with value: '" + email + "' ---");
         this.email = email;
     }
