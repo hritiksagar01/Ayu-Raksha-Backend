@@ -26,7 +26,7 @@ phases:
       - docker push $REPOSITORY_URI:$IMAGE_TAG
 
       - echo Writing image definitions file...
-      - DOCKER_CONTAINER_NAME=javatechie-registry
+      - DOCKER_CONTAINER_NAME=ayu-raksha
 
       - printf '[{"name":"%s","imageUri":"%s"}]' "$DOCKER_CONTAINER_NAME" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
 
