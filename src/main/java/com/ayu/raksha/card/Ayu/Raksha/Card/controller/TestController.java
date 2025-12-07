@@ -7,6 +7,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/test")
 public class TestController {
     public String test() {
-        return "Test successful!";
+        return "Test successful!!!";
     }
 }
