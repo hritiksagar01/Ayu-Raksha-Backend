@@ -1,0 +1,75 @@
+name: Build and Deploy to EC2
+on:
+  push:
+    branches: [ main ]
+
+env:
+  # defaults (can be overridden in workflow or repository secrets)
+  REMOTE_DIR: /opt/app
+  APP_NAME: ayu-raksha-card
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 and cache Maven
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B -U -DskipTests package
+
+      - name: Locate built JAR
+        id: find-jar
+        run: |
+          set -e
+          echo "Searching for JAR in target/ (excluding *.original)"
+          JAR=$(ls target/*.jar 2>/dev/null | grep -v "\.original$" | head -n1 || true)
+          if [ -z "$JAR" ]; then
+            echo "No JAR found in target/" >&2
+            exit 1
+          fi
+          echo "Found JAR: $JAR"
+          echo "JAR_PATH=$JAR" >> $GITHUB_ENV
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_KEY }}" > ./key.pem
+          chmod 600 ./key.pem
+
+      - name: Ensure remote directory exists
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ./key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "sudo mkdir -p ${{ env.REMOTE_DIR }} && sudo chown ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} ${{ env.REMOTE_DIR }}"
+
+      - name: Copy JAR to EC2
+        run: |
+          scp -o StrictHostKeyChecking=no -i ./key.pem "$JAR_PATH" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ env.REMOTE_DIR }}/${{ env.APP_NAME }}.jar
+
+      - name: Restart service on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ./key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "sudo systemctl daemon-reload && sudo systemctl restart ${{ env.APP_NAME }}.service && sudo journalctl -u ${{ env.APP_NAME }}.service -n 200 --no-pager"
+
+      - name: Post-deploy output (list remote dir)
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ./key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            "ls -l ${{ env.REMOTE_DIR }} | sed -n '1,200p'"
+
+# Required repository secrets:
+# - EC2_HOST: public IP or DNS of your EC2 instance
+# - EC2_USER: ssh username (e.g., ubuntu, ec2-user)
+# - EC2_KEY: private key contents (PEM) for the above user
+
+# Notes:
+# - The workflow assumes a systemd service unit named ${APP_NAME}.service exists on the EC2 host.
+# - If you need additional files (config, keystore), extend the upload step with scp/rsync.
+# - For a Docker-based deploy, adapt the remote commands to pull/run the image instead.
