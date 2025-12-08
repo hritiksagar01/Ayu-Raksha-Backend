@@ -34,59 +34,54 @@ public class JwtTokenProvider {
     // Flag to indicate whether JWT operations are enabled (i.e., a usable secret is configured)
     private boolean enabled = false;
 
+    // Actual key used for signing/verification. If configured secret is weak or missing,
+    // we generate a secure random key in-memory so that token creation still works and
+    // does not crash endpoints like /api/auth/sync.
+    private SecretKey signingKey;
+
+    // We use HS256 which only requires a 256-bit key and is sufficient for backend-issued tokens.
+    private static final SignatureAlgorithm SIGNATURE_ALG = SignatureAlgorithm.HS256;
+
     @PostConstruct
     private void init() {
         if (jwtSecret == null) jwtSecret = "";
-        // Consider a secret usable if it decodes to at least 16 bytes or plain-text length >= 16
+
+        // Try to build a key from the configured secret
         try {
-            byte[] decoded = Base64.getDecoder().decode(jwtSecret);
-            if (decoded != null && decoded.length >= 16) {
+            byte[] keyBytes = tryBuildKeyBytes(jwtSecret);
+            if (keyBytes != null && keyBytes.length * 8 >= SIGNATURE_ALG.getMinKeyLength()) {
+                signingKey = Keys.hmacShaKeyFor(keyBytes);
                 enabled = true;
                 return;
             }
+        } catch (Exception ignored) {
+            // fall through to random key
+        }
+
+        // Fallback: generate a secure random key in-memory so signing never fails
+        signingKey = Keys.secretKeyFor(SIGNATURE_ALG);
+        enabled = true;
+        System.out.println("JwtTokenProvider: configured secret is missing or too weak; using generated in-memory key for backend tokens.");
+    }
+
+    private byte[] tryBuildKeyBytes(String secret) {
+        if (!StringUtils.hasText(secret)) return null;
+        try {
+            byte[] decoded = Base64.getDecoder().decode(secret);
+            if (decoded != null && decoded.length > 0) {
+                return decoded;
+            }
         } catch (IllegalArgumentException ignored) {
-            // not base64
+            // not base64, treat as plain text
         }
-        if (jwtSecret.getBytes(StandardCharsets.UTF_8).length >= 16) {
-            enabled = true;
-        } else {
-            enabled = false;
-            System.out.println("JWT provider disabled: no valid jwt secret configured. Token validation/generation will be no-ops.");
-        }
+        return secret.getBytes(StandardCharsets.UTF_8);
     }
 
     private SecretKey getSigningKey() {
-        if (!enabled) {
+        if (!enabled || signingKey == null) {
             throw new IllegalStateException("JWT secret not configured; JwtTokenProvider is disabled.");
         }
-
-        byte[] keyBytes = null;
-
-        // Debug logging to verify the secret being used
-        System.out.println("=== JWT Secret Debug ===");
-        System.out.println("Secret length: " + jwtSecret.length());
-        System.out.println("Secret starts with: " + (jwtSecret.length() > 20 ? jwtSecret.substring(0, 20) + "..." : jwtSecret));
-
-        try {
-            // Try Base64 decode first (Supabase secret may be base64-encoded)
-            byte[] decoded = Base64.getDecoder().decode(jwtSecret);
-            if (decoded != null && decoded.length >= 16) {
-                keyBytes = decoded;
-                System.out.println("Using Base64 decoded secret, decoded length: " + decoded.length + " bytes");
-            }
-        } catch (IllegalArgumentException e) {
-            System.out.println("Not a valid Base64 string, will use as plain text");
-        }
-
-        if (keyBytes == null) {
-            keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-            System.out.println("Using plain text secret, length: " + keyBytes.length + " bytes");
-        }
-
-        System.out.println("Final key bytes length: " + keyBytes.length);
-        System.out.println("======================");
-
-        return Keys.hmacShaKeyFor(keyBytes);
+        return signingKey;
     }
 
     public String generateToken(Authentication authentication) {
@@ -99,7 +94,7 @@ public class JwtTokenProvider {
                 .setSubject(userPrincipal.getEmail())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
-                .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+                .signWith(getSigningKey(), SIGNATURE_ALG)
                 .compact();
     }
 
@@ -116,7 +111,7 @@ public class JwtTokenProvider {
                 .setSubject(user.getEmail())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
-                .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+                .signWith(getSigningKey(), SIGNATURE_ALG)
                 .compact();
     }
 
@@ -139,7 +134,7 @@ public class JwtTokenProvider {
                 .claim("email", user.getEmail())
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
-                .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+                .signWith(getSigningKey(), SIGNATURE_ALG)
                 .compact();
     }
 
