@@ -14,6 +14,7 @@
     import org.springframework.context.annotation.Configuration;
     import org.springframework.http.HttpMethod;
     import org.springframework.security.authentication.AuthenticationManager;
+    import org.springframework.security.config.Customizer;
     import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
     import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
     import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -51,9 +52,8 @@
 
         @Bean
         public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-            // Ensure Spring Security uses the application's CORS configuration
-            http.cors();
             http
+                    .cors(Customizer.withDefaults())
                     .csrf(csrf -> csrf.disable())
                     .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .authorizeHttpRequests(auth -> auth
@@ -61,8 +61,8 @@
                             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                             .requestMatchers("/api/auth/**").permitAll() // Allow all auth requests
                             .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
-                            // Allow patient-related endpoints to be accessed by patients, doctors, and uploaders
-                            .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER")
+                            // Allow patient-related endpoints to be accessed by patients, doctors, uploaders, and Supabase 'authenticated' users
+                            .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "AUTHENTICATED")
                             // Upload: allow presign/metadata to broader roles; restrict direct file POST to admin/uploader
                             .requestMatchers(HttpMethod.POST, "/api/upload/presign", "/api/upload/metadata").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
                             .requestMatchers(HttpMethod.GET, "/api/upload/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
