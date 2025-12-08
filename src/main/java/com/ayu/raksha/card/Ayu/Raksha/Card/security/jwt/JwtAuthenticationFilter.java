@@ -1,6 +1,6 @@
 package com.ayu.raksha.card.Ayu.Raksha.Card.security.jwt;
 
-import com.ayu.raksha.card.Ayu.Raksha.Card.security.service.CustomUserDetailsService;
+import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseTokenValidator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,7 +10,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -19,16 +18,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Autowired
-    private JwtTokenProvider tokenProvider;
-
-    @Autowired
-    private CustomUserDetailsService customUserDetailsService;
+    private SupabaseTokenValidator supabaseTokenValidator;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
@@ -42,27 +39,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = getJwtFromRequest(request);
 
-            if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                String username = tokenProvider.getUsernameFromJWT(jwt);
+            if (StringUtils.hasText(jwt)) {
+                // Ask Supabase if this token is valid and get user info
+                Map<String, Object> userInfo = supabaseTokenValidator.validateAndGetUser(jwt);
 
-                List<String> roles = tokenProvider.getRolesFromJWT(jwt);
-                List<GrantedAuthority> authorities = new ArrayList<>();
+                if (userInfo != null && userInfo.get("email") != null) {
+                    String username = (String) userInfo.get("email");
 
-                if (!roles.isEmpty()) {
-                    authorities = roles.stream()
+                    // Derive roles from Supabase "role" or user_metadata/app_metadata if present
+                    List<String> roles = new ArrayList<>();
+                    Object role = userInfo.get("role");
+                    if (role instanceof String && StringUtils.hasText((String) role)) {
+                        roles.add(((String) role).toUpperCase());
+                    }
+
+                    // Default to PATIENT role if nothing else is present
+                    if (roles.isEmpty()) {
+                        roles.add("PATIENT");
+                    }
+
+                    List<GrantedAuthority> authorities = roles.stream()
                             .map(r -> new SimpleGrantedAuthority("ROLE_" + r.replace("ROLE_", "")))
                             .collect(Collectors.toList());
 
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             username, null, authorities);
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                } else if (username != null) {
-                    // Fallback to loading user from local DB (existing behavior)
-                    UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
-                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                     SecurityContextHolder.getContext().setAuthentication(authentication);
