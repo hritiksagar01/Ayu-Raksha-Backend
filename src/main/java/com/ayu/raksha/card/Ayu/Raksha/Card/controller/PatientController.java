@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/patients")
+@RequestMapping({"/api/patients", "/patients"})
 public class PatientController {
 
     private final UserRepository userRepository;
