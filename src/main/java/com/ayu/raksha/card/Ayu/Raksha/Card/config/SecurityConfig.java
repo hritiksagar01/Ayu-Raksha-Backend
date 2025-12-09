@@ -75,16 +75,16 @@
                             .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
 
                             .requestMatchers(HttpMethod.POST, "/api/upload/presign", "/api/upload/metadata")
-                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN","AUTHENTICATED")
                             .requestMatchers(HttpMethod.GET, "/api/upload/**")
-                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN","AUTHENTICATED")
                             .requestMatchers(HttpMethod.POST, "/api/upload/**")
-                            .hasAnyRole("ADMIN", "UPLOADER")
+                            .hasAnyRole("ADMIN", "UPLOADER","AUTHENTICATED" ,"ADMIN" ,"DOCTOR")
 
                             .requestMatchers(HttpMethod.GET, "/upload/**")
                             .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
                             .requestMatchers(HttpMethod.POST, "/upload/**")
-                            .hasAnyRole("ADMIN", "UPLOADER")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
 
                             .anyRequest().authenticated()
                     );
