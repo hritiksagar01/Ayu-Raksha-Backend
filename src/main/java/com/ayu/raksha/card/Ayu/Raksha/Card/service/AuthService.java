@@ -7,7 +7,7 @@ import com.ayu.raksha.card.Ayu.Raksha.Card.dto.SignupRequest;
 import com.ayu.raksha.card.Ayu.Raksha.Card.models.Role;
 import com.ayu.raksha.card.Ayu.Raksha.Card.models.User;
 import com.ayu.raksha.card.Ayu.Raksha.Card.repository.UserRepository;
-import com.ayu.raksha.card.Ayu.Raksha.Card.security.jwt.JwtTokenProvider;
+// Removed JwtTokenProvider import
 // --- START: ADD THESE IMPORTS ---
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
@@ -37,8 +37,7 @@ public class AuthService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private JwtTokenProvider tokenProvider;
+    // Removed JwtTokenProvider; tokens are managed exclusively by Supabase
 
     @Value("${app.google.client-id}")
     private String googleClientId;
@@ -57,104 +56,18 @@ public class AuthService {
         throw new RuntimeException("Unable to generate unique patient ID after multiple attempts");
     }
 
+    // Deprecated: Google login handled on client via Supabase
     public AuthResponse loginWithGoogle(String idTokenString, String userType) {
-        try {
-            // Step 1: Verify the Google ID token
-            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
-                    .setAudience(Collections.singletonList(googleClientId))
-                    .build();
-
-            GoogleIdToken idToken = verifier.verify(idTokenString);
-            if (idToken == null) {
-                throw new RuntimeException("Invalid Google ID token.");
-            }
-
-            // Step 2: Extract user information from the token
-            GoogleIdToken.Payload payload = idToken.getPayload();
-            String email = payload.getEmail();
-            String name = (String) payload.get("name");
-
-            // Step 3: Find or create the user in your database
-            User user = userRepository.findByEmail(email)
-                    .orElseGet(() -> {
-                        // User doesn't exist, create a new one (sign them up)
-                        User newUser = new User();
-                        newUser.setEmail(email);
-                        newUser.setName(name);
-                        // For Google sign-ups, we can generate a secure random password
-                        // as they won't use it to log in directly.
-                        newUser.setPassword(passwordEncoder.encode("a-very-secure-random-password"));
-
-                        if ("doctor".equalsIgnoreCase(userType)) {
-                            newUser.setRole(Role.ROLE_DOCTOR);
-                        } else {
-                            newUser.setRole(Role.ROLE_PATIENT);
-                            // assign patientId
-                            newUser.setPatientId(generateUniquePatientId());
-                        }
-                        return userRepository.save(newUser);
-                    });
-
-            // Step 4: Generate your application's own JWT
-            String jwt = tokenProvider.generateTokenForUser(user);
-
-            return new AuthResponse(jwt, user);
-
-        } catch (Exception e) {
-            // You can add more specific exception handling here
-            throw new RuntimeException("Google authentication failed: " + e.getMessage());
-        }
+        throw new UnsupportedOperationException("Use Supabase client-side authentication and call /api/auth/sync.");
     }
 
+    // Deprecated: local login disabled; use Supabase
     public AuthResponse loginUser(LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        loginRequest.getEmail(),
-                        loginRequest.getPassword()
-                )
-        );
-
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        User user = (User) authentication.getPrincipal();
-        String jwt = tokenProvider.generateToken(authentication);
-
-        return new AuthResponse(jwt, user);
+        throw new UnsupportedOperationException("Use Supabase client-side authentication and call /api/auth/sync.");
     }
 
+    // Deprecated: local signup disabled; use Supabase
     public AuthResponse registerUser(SignupRequest signUpRequest, String userType) {
-        if (userRepository.existsByEmail(signUpRequest.getEmail())) {
-            throw new RuntimeException("Error: Email is already taken!");
-        }
-
-        User user = new User();
-        user.setName(signUpRequest.getName());
-        user.setEmail(signUpRequest.getEmail());
-        user.setPassword(passwordEncoder.encode(signUpRequest.getPassword()));
-        user.setPhone(signUpRequest.getPhone());
-        user.setDateOfBirth(signUpRequest.getDateOfBirth());
-        user.setGender(signUpRequest.getGender());
-
-        // Set role based on the path variable
-        if ("doctor".equalsIgnoreCase(userType)) {
-            user.setRole(Role.ROLE_DOCTOR);
-        } else if ("admin".equalsIgnoreCase(userType) || "uploader".equalsIgnoreCase(userType)) {
-            // allow registering admin/uploader via this endpoint if needed
-            if ("admin".equalsIgnoreCase(userType)) {
-                user.setRole(Role.ROLE_ADMIN);
-            } else {
-                user.setRole(Role.ROLE_UPLOADER);
-            }
-        } else {
-            user.setRole(Role.ROLE_PATIENT);
-            // generate and assign patientId
-            user.setPatientId(generateUniquePatientId());
-        }
-
-        User savedUser = userRepository.save(user);
-
-        // Automatically log the user in after successful registration
-        String jwt = tokenProvider.generateTokenForUser(user);
-
-        return new AuthResponse(jwt, savedUser);
+        throw new UnsupportedOperationException("Use Supabase client-side signup and call /api/auth/sync.");
     }
 }

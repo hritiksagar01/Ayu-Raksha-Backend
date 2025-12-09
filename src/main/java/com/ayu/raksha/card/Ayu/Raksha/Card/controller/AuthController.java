@@ -8,7 +8,6 @@ import com.ayu.raksha.card.Ayu.Raksha.Card.dto.SyncRequest;
 import com.ayu.raksha.card.Ayu.Raksha.Card.models.Role;
 import com.ayu.raksha.card.Ayu.Raksha.Card.models.User;
 import com.ayu.raksha.card.Ayu.Raksha.Card.repository.UserRepository;
-import com.ayu.raksha.card.Ayu.Raksha.Card.security.jwt.JwtTokenProvider;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.AuthService;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseAdminService;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseTokenValidator;
@@ -30,9 +29,6 @@ public class AuthController {
 
     @Autowired
     private AuthService authService;
-
-    @Autowired
-    private JwtTokenProvider jwtTokenProvider;
 
     @Autowired
     private UserRepository userRepository;
@@ -160,11 +156,6 @@ public class AuthController {
                 System.out.println("User created successfully. ID: " + user.getId());
             }
 
-            System.out.println("Generating backend JWT token...");
-            // Mint a backend JWT that your frontend can use thereafter
-            String backendToken = jwtTokenProvider.generateBackendToken(user);
-            System.out.println("Backend token generated successfully");
-
             // Mirror patientCode to Supabase user metadata if possible
             try {
                 if (roleEnum == Role.ROLE_PATIENT && user.getPatientId() != null) {
@@ -192,13 +183,13 @@ public class AuthController {
             userMap.put("patientCode", user.getPatientId());
 
             Map<String, Object> data = new HashMap<>();
-            data.put("token", backendToken);
+            // No backend token issued; client should keep using the Supabase access token
             data.put("user", userMap);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
             resp.put("data", data);
-            resp.put("message", "Login successful");
+            resp.put("message", "Sync successful");
 
             System.out.println("Sending 200 OK response");
             return ResponseEntity.ok(resp);

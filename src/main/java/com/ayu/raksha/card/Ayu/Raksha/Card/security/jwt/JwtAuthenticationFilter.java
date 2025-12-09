@@ -55,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     // Default to PATIENT role if nothing else is present
                     if (roles.isEmpty()) {
-                        roles.add("PATIENT");
+                        roles.add("AUTHENTICATED");
                     }
 
                     List<GrantedAuthority> authorities = roles.stream()
