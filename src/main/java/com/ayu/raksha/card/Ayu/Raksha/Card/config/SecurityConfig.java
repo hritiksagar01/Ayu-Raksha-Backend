@@ -61,33 +61,35 @@
                     .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .exceptionHandling(eh -> eh.authenticationEntryPoint(unauthorizedEntryPoint()))
                     .authorizeHttpRequests(auth -> auth
-                            // Allow CORS preflight requests
+                            // Allow CORS preflight
                             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                            // 🔑 Allow both /api/auth/** AND /auth/** (because of @RequestMapping and Nginx behavior)
+                            // Auth
                             .requestMatchers("/api/auth/**", "/auth/**").permitAll()
-
-                            // 🔑 Don't protect /error or you'll get 401 instead of the real error
                             .requestMatchers("/error").permitAll()
 
-                            // Your role-based rules
+                            // Role-based
                             .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
-                            .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
+                            .requestMatchers("/api/patients/**")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
 
+                            // ✅ Upload API (with /api prefix)
                             .requestMatchers(HttpMethod.POST, "/api/upload/presign", "/api/upload/metadata")
-                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN","AUTHENTICATED")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
                             .requestMatchers(HttpMethod.GET, "/api/upload/**")
-                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN","AUTHENTICATED")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
                             .requestMatchers(HttpMethod.POST, "/api/upload/**")
-                            .hasAnyRole("ADMIN", "UPLOADER","AUTHENTICATED" ,"ADMIN" ,"DOCTOR")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
 
+                            // ✅ Non-API upload routes (because Nginx strips /api)
                             .requestMatchers(HttpMethod.GET, "/upload/**")
-                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
                             .requestMatchers(HttpMethod.POST, "/upload/**")
                             .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
 
                             .anyRequest().authenticated()
                     );
+
 
             // Keep your filters
             http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
