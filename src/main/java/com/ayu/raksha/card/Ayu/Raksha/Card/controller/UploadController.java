@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 @RestController
-@RequestMapping("/api/upload")
+@RequestMapping({"/api/upload" , "/upload"})
 public class UploadController {
 
     @Autowired
