@@ -9,6 +9,7 @@
     import jakarta.servlet.ServletRequest;
     import jakarta.servlet.ServletResponse;
     import jakarta.servlet.http.HttpServletRequest;
+    import jakarta.servlet.http.HttpServletResponse;
     import org.springframework.beans.factory.annotation.Autowired;
     import org.springframework.context.annotation.Bean;
     import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,7 @@
     import org.springframework.security.crypto.password.PasswordEncoder;
     import org.springframework.security.web.SecurityFilterChain;
     import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+    import org.springframework.security.web.AuthenticationEntryPoint;
 
     import java.io.IOException;
 
@@ -56,17 +58,21 @@
                     .cors(Customizer.withDefaults())
                     .csrf(csrf -> csrf.disable())
                     .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                    .exceptionHandling(eh -> eh.authenticationEntryPoint(unauthorizedEntryPoint()))
                     .authorizeHttpRequests(auth -> auth
                             // Allow CORS preflight requests through without authentication
                             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                             .requestMatchers("/api/auth/**").permitAll() // Allow all auth requests
                             .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
-                            // Allow patient-related endpoints to be accessed by patients, doctors, uploaders, and Supabase 'authenticated' users
-                            .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "AUTHENTICATED")
-                            // Upload: allow presign/metadata to broader roles; restrict direct file POST to admin/uploader
+                            // Patient-related endpoints for authenticated roles
+                            .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
+                            // Upload API paths
                             .requestMatchers(HttpMethod.POST, "/api/upload/presign", "/api/upload/metadata").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
                             .requestMatchers(HttpMethod.GET, "/api/upload/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
                             .requestMatchers(HttpMethod.POST, "/api/upload/**").hasAnyRole("ADMIN", "UPLOADER")
+                            // Also support non-API upload route observed in logs
+                            .requestMatchers(HttpMethod.GET, "/upload/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .requestMatchers(HttpMethod.POST, "/upload/**").hasAnyRole("ADMIN", "UPLOADER")
                             .anyRequest().authenticated() // All other requests must be authenticated
                     );
 
@@ -92,5 +98,15 @@
             }, JwtAuthenticationFilter.class);
 
             return http.build();
+        }
+
+        @Bean
+        public AuthenticationEntryPoint unauthorizedEntryPoint() {
+            return (request, response, authException) -> {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                String msg = authException != null && authException.getMessage() != null ? authException.getMessage() : "Unauthorized";
+                response.getWriter().write("{\"success\":false,\"error\":\"" + msg.replace("\"", "'") + "\"}");
+            };
         }
     }
