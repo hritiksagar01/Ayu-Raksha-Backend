@@ -20,6 +20,7 @@
     import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
     import org.springframework.security.config.annotation.web.builders.HttpSecurity;
     import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+    import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
     import org.springframework.security.config.http.SessionCreationPolicy;
     import org.springframework.security.core.Authentication;
     import org.springframework.security.core.context.SecurityContextHolder;
@@ -60,35 +61,48 @@
                     .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                     .exceptionHandling(eh -> eh.authenticationEntryPoint(unauthorizedEntryPoint()))
                     .authorizeHttpRequests(auth -> auth
-                            // Allow CORS preflight requests through without authentication
+                            // Allow CORS preflight requests
                             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                            .requestMatchers("/api/auth/**").permitAll() // Allow all auth requests
+
+                            // 🔑 Allow both /api/auth/** AND /auth/** (because of @RequestMapping and Nginx behavior)
+                            .requestMatchers("/api/auth/**", "/auth/**").permitAll()
+
+                            // 🔑 Don't protect /error or you'll get 401 instead of the real error
+                            .requestMatchers("/error").permitAll()
+
+                            // Your role-based rules
                             .requestMatchers("/api/doctor/**").hasRole("DOCTOR")
-                            // Patient-related endpoints for authenticated roles
                             .requestMatchers("/api/patients/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN", "AUTHENTICATED")
-                            // Upload API paths
-                            .requestMatchers(HttpMethod.POST, "/api/upload/presign", "/api/upload/metadata").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
-                            .requestMatchers(HttpMethod.GET, "/api/upload/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
-                            .requestMatchers(HttpMethod.POST, "/api/upload/**").hasAnyRole("ADMIN", "UPLOADER")
-                            // Also support non-API upload route observed in logs
-                            .requestMatchers(HttpMethod.GET, "/upload/**").hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
-                            .requestMatchers(HttpMethod.POST, "/upload/**").hasAnyRole("ADMIN", "UPLOADER")
-                            .anyRequest().authenticated() // All other requests must be authenticated
+
+                            .requestMatchers(HttpMethod.POST, "/api/upload/presign", "/api/upload/metadata")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .requestMatchers(HttpMethod.GET, "/api/upload/**")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .requestMatchers(HttpMethod.POST, "/api/upload/**")
+                            .hasAnyRole("ADMIN", "UPLOADER")
+
+                            .requestMatchers(HttpMethod.GET, "/upload/**")
+                            .hasAnyRole("PATIENT", "DOCTOR", "UPLOADER", "ADMIN")
+                            .requestMatchers(HttpMethod.POST, "/upload/**")
+                            .hasAnyRole("ADMIN", "UPLOADER")
+
+                            .anyRequest().authenticated()
                     );
 
-            // Add our custom JWT filter before the standard authentication filter
+            // Keep your filters
             http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-            // Add a logging filter to trace requests (after JWT so we can see authorities)
             http.addFilterAfter(new Filter() {
                 @Override
-                public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+                public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+                        throws IOException, ServletException {
                     HttpServletRequest httpRequest = (HttpServletRequest) request;
                     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
                     System.out.println("Request URI: " + httpRequest.getRequestURI());
                     if (authentication != null) {
-                        System.out.println("Authentication: " + authentication.getName() + ", Authorities: " + authentication.getAuthorities());
+                        System.out.println("Authentication: " + authentication.getName()
+                                + ", Authorities: " + authentication.getAuthorities());
                     } else {
                         System.out.println("No authentication found.");
                     }
@@ -99,6 +113,7 @@
 
             return http.build();
         }
+
 
         @Bean
         public AuthenticationEntryPoint unauthorizedEntryPoint() {
