@@ -105,6 +105,8 @@
             return (request, response, authException) -> {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json");
+                // Add standard WWW-Authenticate header for bearer tokens
+                response.setHeader("WWW-Authenticate", "Bearer realm=\"AyuRakshaCard\", error=\"invalid_token\"");
                 String msg = authException != null && authException.getMessage() != null ? authException.getMessage() : "Unauthorized";
                 response.getWriter().write("{\"success\":false,\"error\":\"" + msg.replace("\"", "'") + "\"}");
             };

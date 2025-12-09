@@ -3,6 +3,7 @@ package com.ayu.raksha.card.Ayu.Raksha.Card.security.jwt;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseTokenValidator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
-        return path.startsWith("/api/auth");
+        if (path == null) return false;
+        return path.startsWith("/api/auth")
+                || path.startsWith("/auth")
+                || path.startsWith("/error")
+                || path.startsWith("/actuator")
+                || path.startsWith("/static")
+                || path.equals("/")
+                || path.equals("/favicon.ico");
     }
 
     @Override
@@ -53,7 +61,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         roles.add(((String) role).toUpperCase());
                     }
 
-                    // Default to PATIENT role if nothing else is present
+                    // Default to AUTHENTICATED role if nothing else is present
                     if (roles.isEmpty()) {
                         roles.add("AUTHENTICATED");
                     }
@@ -79,8 +87,52 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
+            String token = bearerToken.substring(7).trim();
+            if (isUsableToken(token)) {
+                System.out.println("Auth token source: Authorization header (" + mask(token) + ")");
+                return token;
+            }
+        }
+        // Check query parameter fallback
+        String qp = request.getParameter("access_token");
+        if (isUsableToken(qp)) {
+            System.out.println("Auth token source: query param access_token (" + mask(qp) + ")");
+            return qp;
+        }
+        // Check common cookie names used for auth
+        if (request.getCookies() != null) {
+            for (Cookie c : request.getCookies()) {
+                if (c == null) continue;
+                String name = c.getName();
+                if (name == null) continue;
+                if (name.equals("auth_token") || name.equals("sb-access-token") || name.equals("sb:token") ||
+                        name.equals("supabase_access_token") || name.equals("access_token")) {
+                    String v = c.getValue();
+                    if (isUsableToken(v)) {
+                        System.out.println("Auth token source: cookie '" + name + "' (" + mask(v) + ")");
+                        return v;
+                    }
+                }
+            }
         }
         return null;
+    }
+
+    private boolean isUsableToken(String token) {
+        if (!StringUtils.hasText(token)) return false;
+        String t = token.trim();
+        if (t.equalsIgnoreCase("undefined") || t.equalsIgnoreCase("null")) return false;
+        return true;
+    }
+
+    private String mask(String token) {
+        try {
+            if (token == null) return "";
+            int n = token.length();
+            if (n <= 10) return "***";
+            return token.substring(0, 5) + "..." + token.substring(n - 5);
+        } catch (Exception e) {
+            return "***";
+        }
     }
 }

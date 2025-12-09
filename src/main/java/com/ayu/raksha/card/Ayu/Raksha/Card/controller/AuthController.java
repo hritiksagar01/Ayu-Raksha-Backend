@@ -14,6 +14,7 @@ import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseTokenValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -55,7 +56,8 @@ public class AuthController {
 
     // New: sync endpoint — accepts Authorization: Bearer <supabase_token> OR body.accessToken
     @PostMapping("/sync")
-    public ResponseEntity<?> syncUser(@RequestHeader HttpHeaders headers, @RequestBody(required = false) SyncRequest req) {
+    public ResponseEntity<?> syncUser(@RequestHeader HttpHeaders headers, @RequestBody(required = false) SyncRequest req,
+                                      javax.servlet.http.HttpServletResponse servletResponse) {
         try {
             System.out.println("=== /api/auth/sync called ===");
 
@@ -71,7 +73,7 @@ public class AuthController {
                     System.out.println("Token from Authorization header");
                 }
             }
-            if (token == null) {
+            if (token == null || token.equalsIgnoreCase("undefined") || token.equalsIgnoreCase("null")) {
                 System.err.println("ERROR: Missing access token");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("success", false, "error", "Missing access token"));
             }
@@ -170,6 +172,20 @@ public class AuthController {
                 }
             } catch (Exception e) {
                 System.err.println("Failed to mirror patientCode: " + e.getMessage());
+            }
+
+            // Set auth cookie for compatibility with existing frontend
+            try {
+                ResponseCookie authCookie = ResponseCookie.from("auth_token", token)
+                        .httpOnly(true)
+                        .secure(false) // set true when behind HTTPS
+                        .sameSite("Lax")
+                        .path("/")
+                        .maxAge(7 * 24 * 60 * 60) // 7 days
+                        .build();
+                servletResponse.addHeader(HttpHeaders.SET_COOKIE, authCookie.toString());
+            } catch (Exception e) {
+                System.err.println("Failed to set auth cookie: " + e.getMessage());
             }
 
             System.out.println("Building response...");
