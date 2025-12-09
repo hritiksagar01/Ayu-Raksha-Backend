@@ -11,6 +11,7 @@ import com.ayu.raksha.card.Ayu.Raksha.Card.repository.UserRepository;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.AuthService;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseAdminService;
 import com.ayu.raksha.card.Ayu.Raksha.Card.service.SupabaseTokenValidator;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -57,7 +58,7 @@ public class AuthController {
     // New: sync endpoint — accepts Authorization: Bearer <supabase_token> OR body.accessToken
     @PostMapping("/sync")
     public ResponseEntity<?> syncUser(@RequestHeader HttpHeaders headers, @RequestBody(required = false) SyncRequest req,
-                                      javax.servlet.http.HttpServletResponse servletResponse) {
+                                      HttpServletResponse servletResponse) {
         try {
             System.out.println("=== /api/auth/sync called ===");
 
